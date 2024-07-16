@@ -5,11 +5,10 @@ import cv2
 from transformers import BlipProcessor, BlipForConditionalGeneration, pipeline
 import torch
 import moviepy.editor as mp
-import tempfile
 import os
-from database import SessionLocal, init_db, engine
+import uuid
+from database import SessionLocal, init_db
 from models import VideoData
-from sqlalchemy.orm import sessionmaker
 
 app = FastAPI()
 
@@ -41,34 +40,38 @@ def generate_caption(image):
 
 @app.post("/process-video/")
 async def process_video(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    # Save the uploaded file to a temporary file
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".mov") as tmp:
-        tmp.write(await file.read())
-        video_path = tmp.name
+    # Generate a unique ID for the video and audio files
+    unique_id = str(uuid.uuid4())
 
-    cap = cv2.VideoCapture(video_path)
+    # Ensure the media directories exist
+    os.makedirs('media/videos', exist_ok=True)
+    os.makedirs('media/audio', exist_ok=True)
+
+    # Save the uploaded file to the media/videos directory with a unique name
+    video_filename = f"{unique_id}.mov"
+    video_filepath = os.path.join('media/videos', video_filename)
+    with open(video_filepath, 'wb') as f:
+        f.write(await file.read())
+
+    cap = cv2.VideoCapture(video_filepath)
 
     # Get video properties
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Codec
-
-    # Define the output video
-    output_path = 'video_with_captions.mp4'
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
     frame_count = 0
     caption = ""
     captions = []
 
-    # Extract audio from video
-    audio_path = 'audio.wav'
-    video = mp.VideoFileClip(video_path)
-    video.audio.write_audiofile(audio_path)
+    # Extract audio from video with a unique name
+    audio_filename = f"{unique_id}.wav"
+    audio_filepath = os.path.join('media/audio', audio_filename)
+    video = mp.VideoFileClip(video_filepath)
+    video.audio.write_audiofile(audio_filepath)
 
     # Transcribe the audio
-    audio_transcription = transcriber(audio_path)["text"]
+    audio_transcription = transcriber(audio_filepath)["text"]
 
     while cap.isOpened():
         ret, frame = cap.read()
@@ -84,21 +87,15 @@ async def process_video(file: UploadFile = File(...), db: Session = Depends(get_
             # Save the caption and timestamp
             captions.append(f"Timestamp {timestamp:.2f}s: {caption}")
 
-        # Display caption on the frame
-        cv2.putText(frame, caption, (10, height - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2)
-
-        # Write the frame to the output video
-        out.write(frame)
-
         frame_count += 1
 
     # Release resources
     cap.release()
-    out.release()
 
     # Save to database
     video_data = VideoData(
-        video_path=output_path,
+        video_path=video_filepath,
+        audio_path=audio_filepath,  # Include audio_path
         transcription=audio_transcription,
         captions="\n".join(captions)
     )
@@ -106,7 +103,13 @@ async def process_video(file: UploadFile = File(...), db: Session = Depends(get_
     db.commit()
     db.refresh(video_data)
 
-    return {"video_data_id": video_data.id, "output_video": output_path, "captions": captions, "transcription": audio_transcription}
+    return {
+        "video_data_id": video_data.id,
+        "video_path": video_filepath,
+        "audio_path": audio_filepath,
+        "captions": captions,
+        "transcription": audio_transcription
+    }
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
