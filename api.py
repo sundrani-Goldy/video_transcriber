@@ -1,5 +1,3 @@
-# api.py
-
 import os
 from fastapi import FastAPI, UploadFile, File, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -25,30 +23,35 @@ def get_db():
     finally:
         db.close()
 
-@app.post("/process-video/")
-async def process_video(background_tasks: BackgroundTasks, file: UploadFile = File(...), db: Session = Depends(get_db)):
-    # Generate a unique ID for the video and audio files
-    unique_id = str(uuid.uuid4())
+@app.post("/process-videos/")
+async def process_videos(background_tasks: BackgroundTasks, files: list[UploadFile] = File(...), db: Session = Depends(get_db)):
+    responses = []
+    for file in files:
+        # Generate a unique ID for the video and audio files
+        unique_id = str(uuid.uuid4())
 
-    # Save the uploaded file to the media/videos directory with a unique name
-    video_filename = f"{unique_id}.mov"
-    video_filepath = os.path.join('media/videos', video_filename)
-    with open(video_filepath, 'wb') as f:
-        f.write(await file.read())
+        # Save the uploaded file to the media/videos directory with a unique name
+        video_filename = f"{unique_id}.mov"
+        video_filepath = os.path.join('media/videos', video_filename)
+        with open(video_filepath, 'wb') as f:
+            f.write(await file.read())
 
-    # Validate the uploaded video file
-    valid, error_message, duration, fps, width, height = validate_video(video_filepath)
-    if not valid:
-        return {"message": f"Error processing video: {error_message}"}
+        # Validate the uploaded video file
+        valid, error_message, duration, fps, width, height = validate_video(video_filepath)
+        if not valid:
+            responses.append({"message": f"Error processing video: {error_message}", "video_id": unique_id})
+            continue
 
-    # Define paths for audio file and output video
-    audio_filename = f"{unique_id}.wav"
-    audio_filepath = os.path.join('media/audio', audio_filename)
+        # Define paths for audio file
+        audio_filename = f"{unique_id}.wav"
+        audio_filepath = os.path.join('media/audio', audio_filename)
 
-    # Add the Celery task to the background tasks
-    background_tasks.add_task(transcribe_and_generate_captions, video_filepath, audio_filepath, db, unique_id)
+        # Add the Celery task to the background tasks
+        background_tasks.add_task(transcribe_and_generate_captions, video_filepath, audio_filepath, db, unique_id)
 
-    return {"message": "Video is being processed", "video_id": unique_id}
+        responses.append({"message": "Video is being processed", "video_id": unique_id})
+
+    return responses
 
 if __name__ == "__main__":
     import uvicorn
