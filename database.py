@@ -4,11 +4,11 @@ from sqlalchemy.orm import sessionmaker
 import os
 
 # Use environment variables to configure the database URL
-# SQLALCHEMY_DATABASE_URL = (
-#     # f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
-#     # f"@{os.getenv('DB_HOST_NAME', 'db')}:{os.getenv('DB_PORT', 5432)}/{os.getenv('POSTGRES_DB')}"
-# )
-SQLALCHEMY_DATABASE_URL = "postgresql://postgres:root@localhost/video_transcript"
+SQLALCHEMY_DATABASE_URL = (
+    f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
+    f"@{os.getenv('DB_HOST_NAME', 'db')}:{os.getenv('DB_PORT', 5432)}/{os.getenv('POSTGRES_DB')}"
+)
+
 # Create the SQLAlchemy engine
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 
@@ -25,7 +25,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
 
 def init_db():
     Base.metadata.create_all(bind=engine)

@@ -1,5 +1,3 @@
-# api.py
-
 import os
 from fastapi import FastAPI, UploadFile, File, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -7,6 +5,8 @@ import uuid
 from database import SessionLocal, init_db
 from models import VideoData
 from utils import transcribe_and_generate_captions, validate_video
+import asyncio
+from transformers import BlipProcessor, BlipForConditionalGeneration, pipeline
 
 app = FastAPI()
 
@@ -24,6 +24,17 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# Asynchronous function to download models
+async def download_models():
+    processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-large")
+    caption_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-large")
+    transcriber = pipeline("automatic-speech-recognition", model="openai/whisper-large-v3")
+
+# Startup event to download models
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(download_models())
 
 @app.post("/process-video/")
 async def process_video(background_tasks: BackgroundTasks, file: UploadFile = File(...), db: Session = Depends(get_db)):

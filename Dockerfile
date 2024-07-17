@@ -1,28 +1,24 @@
-# Use the official Python 3.11 image from the Docker Hub
+# Use the official Python image from the Docker Hub
 FROM python:3.11
 
-# Set the working directory in the container to /app
+# Set the working directory in the container
 WORKDIR /app
 
-# Set environment variables to prevent Python from buffering its output
-ENV PYTHONUNBUFFERED=1
+# Copy the requirements file into the container
+COPY req.txt .
 
-# Install system dependencies and update pip
-RUN apt-get update && apt-get install -y \
-    libpq-dev \
-    && pip install --upgrade pip
+# Install dependencies
+RUN pip install --no-cache-dir -r req.txt
 
-# Copy the requirements file into the container at /app
-COPY ./requirements.txt /app/
+# Download the models during the build process
+RUN python -c "from transformers import BlipProcessor, BlipForConditionalGeneration; BlipProcessor.from_pretrained('Salesforce/blip-image-captioning-large'); BlipForConditionalGeneration.from_pretrained('Salesforce/blip-image-captioning-large')"
+RUN python -c "from transformers import pipeline; pipeline('automatic-speech-recognition', model='openai/whisper-large-v3')"
 
-# Install the Python dependencies from requirements.txt
-RUN pip install -r requirements.txt
+# Copy the rest of the application code into the container
+COPY . .
 
-# Copy the rest of the application code into the container at /app
-COPY . /app/
-
-# Expose port 8000 for the Flask app to listen on
+# Expose the port that the FastAPI app runs on
 EXPOSE 8000
 
-# Define the command to run the Flask app
-CMD ["fastapi","dev", "api.py", "--host", "0.0.0.0", "--port", "8000"]
+# Run the command to start the FastAPI application
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
