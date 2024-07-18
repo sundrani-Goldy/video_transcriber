@@ -16,7 +16,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 15g  # Adjust this value based on your system's capacity
+          memory: 10g  # Adjust this value based on your system's capacity
 
   db:
     image: postgres:13

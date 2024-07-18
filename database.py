@@ -5,8 +5,8 @@ import os
 
 # Use environment variables to configure the database URL
 SQLALCHEMY_DATABASE_URL = (
-    f"postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
-    f"@{os.getenv('DB_HOST_NAME', 'db')}:{os.getenv('DB_PORT', 5432)}/{os.getenv('POSTGRES_DB')}"
+    f"postgresql://{os.getenv('POSTGRES_USER' , 'postgres')}:{os.getenv('POSTGRES_PASSWORD' , 'root')}"
+    f"@{os.getenv('DB_HOST_NAME', 'localhost')}:{os.getenv('DB_PORT', 5432)}/{os.getenv('POSTGRES_DB' , 'video_transcript')}"
 )
 
 # Create the SQLAlchemy engine

@@ -1,3 +1,6 @@
+# utils.py
+
+from celery import current_task
 import cv2
 from transformers import BlipProcessor, BlipForConditionalGeneration, pipeline
 import moviepy.editor as mp
@@ -47,6 +50,8 @@ def transcribe_and_generate_captions(video_filepath, audio_filepath, db, unique_
     # Transcribe the audio
     audio_transcription = transcriber(audio_filepath)["text"]
 
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
@@ -62,6 +67,9 @@ def transcribe_and_generate_captions(video_filepath, audio_filepath, db, unique_
             captions.append(f"Timestamp {timestamp:.2f}s: {caption}")
 
         frame_count += 1
+
+        # Report progress to Celery
+        current_task.update_state(state='PROGRESS', meta={'current': frame_count, 'total': total_frames})
 
     # Release resources
     cap.release()
